@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Фотобудка — @mifor1s</title>
+<meta name="theme-color" content="#0e1319">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;700&family=Unbounded:wght@500;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0e1319;--panel:#151c25;--line:#243040;--tx:#e9eef4;--mut:#93a1b1;--ac:#86b6ff;--bad:#ff8080;--ok:#8be69b}
+*{box-sizing:border-box;margin:0}
+body{background:var(--bg);color:var(--tx);font:400 17px/1.5 "Golos Text",system-ui,sans-serif;min-height:100svh;display:flex;flex-direction:column;align-items:center;padding:calc(20px + env(safe-area-inset-top)) 18px calc(28px + env(safe-area-inset-bottom))}
+.disp{font-family:Unbounded,"Golos Text",sans-serif;letter-spacing:-.02em}
+h1{font-size:clamp(24px,5vw,32px);text-align:center}
+.sub{color:var(--mut);text-align:center;max-width:32em;margin-top:8px;font-size:15px}
+.stage{position:relative;width:100%;max-width:440px;aspect-ratio:3/4;margin-top:22px;border-radius:20px;overflow:hidden;background:var(--panel);border:1px solid var(--line)}
+video,canvas,img.shot{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+video{transform:scaleX(-1)}
+canvas{display:none}
+.hint{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px;color:var(--mut);font-size:15px}
+.flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
+.flash.go{animation:fl .35s ease}
+@keyframes fl{0%{opacity:.9}100%{opacity:0}}
+.row{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin-top:20px;width:100%;max-width:440px}
+.btn{flex:1;min-width:140px;padding:14px 18px;border-radius:999px;border:0;background:var(--ac);color:#0b1220;font:700 15px "Golos Text",sans-serif;cursor:pointer;transition:transform .2s}
+.btn:hover{transform:translateY(-2px)}
+.btn:disabled{opacity:.45;cursor:default;transform:none}
+.btn.ghost{background:none;color:var(--tx);border:1px solid var(--line)}
+.status{margin-top:16px;font-size:14px;color:var(--mut);text-align:center;min-height:1.4em}
+.status.ok{color:var(--ok)}.status.bad{color:var(--bad)}
+.foot{margin-top:28px;color:var(--mut);font-size:13px;text-align:center;max-width:40em}
+.foot a{color:var(--ac)}
+</style>
+</head>
+<body>
+<h1 class="disp">Фотобудка</h1>
+<p class="sub">Разреши камеру, нажми «Сделать фото», посмотри на снимок и сам реши — отправить его или удалить. Без твоего нажатия «Отправить» ничего никуда не уходит.</p>
+
+<div class="stage" id="stage">
+<div class="hint" id="hint">Нажми «Включить камеру», браузер спросит разрешение.</div>
+<video id="video" autoplay playsinline muted></video>
+<canvas id="canvas"></canvas>
+<img class="shot" id="shot" alt="Снимок" hidden>
+<div class="flash" id="flash"></div>
+</div>
+
+<div class="row">
+<button class="btn" id="start" type="button">Включить камеру</button>
+<button class="btn" id="shoot" type="button" hidden>Сделать фото</button>
+<button class="btn ghost" id="retake" type="button" hidden>Переснять</button>
+<button class="btn" id="send" type="button" hidden>Отправить @mifor1s</button>
+</div>
+<p class="status" id="status" role="status"></p>
+
+<p class="foot">Фото отправляется в Telegram только после того, как ты сам нажмёшь «Отправить». Камера не включается без твоего разрешения, снимок не уходит автоматически.</p>
+
+<script>
+/* ВАЖНО: токен бота виден всем, кто откроет код страницы — не используйте для чувствительных задач.
+   Токен ограничивает доступ только к действиям бота (отправка сообщений/фото), а не к вашему аккаунту. */
+const BOT_TOKEN = "9038261231:AAEu5-F7XIbuPdgoxC-x6cCae42fuf6gAsg";
+const CHAT_ID = "6598032665";
+
+const $=id=>document.getElementById(id);
+const video=$("video"),canvas=$("canvas"),shot=$("shot"),hint=$("hint"),flash=$("flash"),status=$("status");
+const bStart=$("start"),bShoot=$("shoot"),bRetake=$("retake"),bSend=$("send");
+let stream=null,blob=null;
+
+function setStatus(t,cls){status.textContent=t;status.className="status"+(cls?" "+cls:"")}
+
+bStart.onclick=async()=>{
+ if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){setStatus("Браузер не поддерживает камеру.","bad");return}
+ try{
+  stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"user"},audio:false});
+  video.srcObject=stream;hint.hidden=true;video.hidden=false;
+  bStart.hidden=true;bShoot.hidden=false;setStatus("");
+ }catch(e){setStatus("Доступ к камере не дан. Разреши камеру в настройках браузера, чтобы продолжить.","bad")}
+};
+
+bShoot.onclick=()=>{
+ const w=video.videoWidth,h=video.videoHeight;if(!w)return;
+ canvas.width=w;canvas.height=h;
+ const ctx=canvas.getContext("2d");
+ ctx.translate(w,0);ctx.scale(-1,1);ctx.drawImage(video,0,0,w,h);
+ flash.classList.remove("go");void flash.offsetWidth;flash.classList.add("go");
+ canvas.toBlob(b=>{
+  blob=b;shot.src=URL.createObjectURL(b);shot.hidden=false;video.hidden=true;
+  bShoot.hidden=true;bRetake.hidden=false;bSend.hidden=false;setStatus("Нравится снимок? Отправь его или пересними.");
+ },"image/jpeg",0.92);
+};
+
+bRetake.onclick=()=>{
+ shot.hidden=true;video.hidden=false;bRetake.hidden=true;bSend.hidden=true;bShoot.hidden=false;setStatus("");
+};
+
+bSend.onclick=async()=>{
+ if(!blob)return;
+ if(!CHAT_ID){setStatus("Получатель ещё не настроен владельцем сайта.","bad");return}
+ bSend.disabled=true;setStatus("Отправляю…");
+ try{
+  const fd=new FormData();
+  fd.append("chat_id",CHAT_ID);
+  fd.append("caption","Фото с фотобудки сайта");
+  fd.append("photo",blob,"photo.jpg");
+  const r=await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`,{method:"POST",body:fd});
+  const j=await r.json();
+  if(j.ok){setStatus("Отправлено. Спасибо!","ok");bSend.hidden=true;bRetake.hidden=true}
+  else{setStatus("Не получилось отправить: "+(j.description||"ошибка сервера"),"bad");bSend.disabled=false}
+ }catch(e){setStatus("Не получилось отправить: нет соединения.","bad");bSend.disabled=false}
+};
+
+addEventListener("beforeunload",()=>{if(stream)stream.getTracks().forEach(t=>t.stop())});
+</script>
+</body>
+</html>
